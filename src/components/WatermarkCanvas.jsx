@@ -11,7 +11,11 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
             const img = new Image();
             img.crossOrigin = "anonymous";
             img.onload = () => resolve(img);
-            img.onerror = reject;
+            img.onerror = () => {
+                console.warn("Failed to load image:", src);
+                // Return null/placeholder on error to prevent crash
+                resolve(null);
+            };
             if (!src) reject(new Error("No source"));
             img.src = src;
         });
@@ -23,7 +27,13 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
         const renderCanvas = async () => {
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
+
+            // Load Base Image
             const baseImg = await loadImage(uploadedImage);
+            if (!baseImg) return;
+
+            // Load Logo Image (Parallel)
+            const logoImg = await loadImage('/logo.png');
 
             canvas.width = baseImg.width;
             canvas.height = baseImg.height;
@@ -63,7 +73,11 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
             if (mapSnapshot) {
                 try {
                     const mapImg = await loadImage(mapSnapshot);
-                    ctx.drawImage(mapImg, mapX, mapY, mapSize, mapSize);
+                    if (mapImg) {
+                        ctx.drawImage(mapImg, mapX, mapY, mapSize, mapSize);
+                    } else {
+                        drawMapFallback(ctx, mapX, mapY, mapSize);
+                    }
                 } catch (e) {
                     drawMapFallback(ctx, mapX, mapY, mapSize);
                 }
@@ -141,7 +155,6 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
 
 
             // --- 4. Draw "GPS Map Camera" Logo ---
-            // Merged tab style
             ctx.save();
 
             const logoText = "GPS Map Camera";
@@ -149,7 +162,7 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
             ctx.font = `600 ${fontSize}px ${fontStack}`;
             const logoTextWidth = ctx.measureText(logoText).width;
 
-            const iconSize = fontSize * 1.2;
+            const iconSize = fontSize * 1.5;
             const paddingH = 8;
             const paddingV = 4;
 
@@ -166,37 +179,20 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
             ctx.roundRect(badgeX, badgeY, badgeW, badgeH, [5, 5, 0, 0]);
             ctx.fill();
 
-            // Icon
-            const iconX = badgeX + paddingH;
-            const iconY = badgeY + paddingV;
-
-            // Blue Box for Icon
-            ctx.fillStyle = '#2196F3'; // Material Blue
-            ctx.beginPath();
-            ctx.roundRect(iconX, iconY, iconSize, iconSize, 3);
-            ctx.fill();
-
-            // Camera Lens
-            ctx.fillStyle = '#111';
-            ctx.beginPath();
-            ctx.arc(iconX + iconSize / 2, iconY + iconSize / 2, iconSize * 0.35, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#555';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            // Yellow Flash dot? Reference implies small detail.
-            ctx.fillStyle = '#FFD700';
-            ctx.beginPath();
-            ctx.arc(iconX + iconSize * 0.8, iconY + iconSize * 0.2, iconSize * 0.1, 0, Math.PI * 2);
-            ctx.fill();
+            // Draw Icon Image
+            if (logoImg) {
+                ctx.drawImage(logoImg, badgeX + paddingH, badgeY + paddingV, iconSize, iconSize);
+            }
 
             // Text
             ctx.fillStyle = "white";
             ctx.textAlign = "left";
-            ctx.fillText(logoText, iconX + iconSize + paddingH, badgeY + badgeH - paddingV * 1.5);
+            // Align text vertically with the icon
+            const textY = badgeY + (badgeH / 2) + (fontSize * 0.35);
+            ctx.fillText(logoText, badgeX + iconSize + (paddingH * 2), textY);
 
             ctx.restore();
+
 
             setDownloadUrl(canvas.toDataURL('image/jpeg', 0.9));
         };
