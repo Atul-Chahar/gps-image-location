@@ -10,13 +10,40 @@ function App() {
     const [uploadedImage, setUploadedImage] = useState(null);
     const [mapSnapshot, setMapSnapshot] = useState(null);
 
+    // Helper to format date like: "Wednesday, 17/12/2025 09:38 AM GMT +05:30"
+    const getCurrentDateTime = () => {
+        const now = new Date();
+        const datePart = now.toLocaleDateString('en-GB', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric'
+        });
+        // Date part comes out like "Wednesday, 17/12/2025" in en-GB
+
+        const timePart = now.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+
+        // Get GMT offset
+        const offset = -now.getTimezoneOffset();
+        const sign = offset >= 0 ? '+' : '-';
+        const hours = Math.floor(Math.abs(offset) / 60).toString().padStart(2, '0');
+        const mins = (Math.abs(offset) % 60).toString().padStart(2, '0');
+        const gmt = `GMT ${sign}${hours}:${mins}`;
+
+        return `${datePart} ${timePart} ${gmt}`;
+    };
+
     // Default Data
     const [watermarkData, setWatermarkData] = useState({
         addressTitle: 'Agra, Uttar Pradesh, India',
         addressLine1: '3, Sainik Nagar, Agra, Uttar Pradesh 282001, India',
         lat: '27.13768',
         long: '78.016836',
-        dateTime: 'Wednesday, 17/12/2025 09:38 AM GMT +05:30'
+        dateTime: getCurrentDateTime()
     });
 
     const captureMap = async () => {
