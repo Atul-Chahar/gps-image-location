@@ -1,11 +1,15 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Toast } from '@capacitor/toast';
 
 const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
+    // ... (existing refs and state) ...
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const [downloadUrl, setDownloadUrl] = useState(null);
 
-    // Helper to load image
+    // ... (existing loadImage function) ...
     const loadImage = (src) => {
         return new Promise((resolve, reject) => {
             const img = new Image();
@@ -13,7 +17,6 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
             img.onload = () => resolve(img);
             img.onerror = () => {
                 console.warn("Failed to load image:", src);
-                // Return null/placeholder on error to prevent crash
                 resolve(null);
             };
             if (!src) reject(new Error("No source"));
@@ -21,10 +24,12 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
         });
     };
 
+    // ... (existing useEffect for rendering) ...
     useEffect(() => {
         if (!uploadedImage || !canvasRef.current) return;
 
         const renderCanvas = async () => {
+            // ... (keep existing rendering logic exactly as is) ...
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
 
@@ -65,11 +70,9 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
             const overlayColor = 'rgba(0, 0, 0, 0.6)';
 
             // --- 1. Draw Map Square (Left) ---
-            // No Border as requested
 
             ctx.save();
 
-            // Draw Map Content
             if (mapSnapshot) {
                 try {
                     const mapImg = await loadImage(mapSnapshot);
@@ -85,27 +88,24 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
                 drawMapFallback(ctx, mapX, mapY, mapSize);
             }
 
-            // Red Pin (Updated Style)
+            // Red Pin
             const pinX = mapX + mapSize / 2;
             const pinY = mapY + mapSize / 2;
             const pinSize = mapSize * 0.08;
 
-            ctx.fillStyle = '#ea4335'; // Google Red
+            ctx.fillStyle = '#ea4335';
             ctx.beginPath();
             ctx.arc(pinX, pinY - pinSize / 2, pinSize, 0, Math.PI * 2);
             ctx.fill();
-            // Triangle bottom for pin
             ctx.beginPath();
             ctx.moveTo(pinX - pinSize * 0.9, pinY - pinSize * 0.5);
             ctx.lineTo(pinX + pinSize * 0.9, pinY - pinSize * 0.5);
             ctx.lineTo(pinX, pinY + pinSize * 1.5);
             ctx.fill();
-            // Small black dot in middle
             ctx.fillStyle = 'rgba(0,0,0,0.2)';
             ctx.beginPath(); ctx.arc(pinX, pinY - pinSize * 0.5, pinSize * 0.4, 0, Math.PI * 2); ctx.fill();
 
-
-            // Google Logo overlay
+            // Google Logo
             ctx.fillStyle = 'white';
             ctx.font = `bold ${mapSize * 0.12}px ${fontStack}`;
             ctx.shadowColor = "black";
@@ -114,12 +114,9 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
             ctx.shadowBlur = 0;
             ctx.restore();
 
-
             // --- 2. Draw Text Container (Right) ---
             ctx.save();
             ctx.fillStyle = overlayColor;
-
-            // Radius 4px as requested
             const radius = 5;
             ctx.beginPath();
             ctx.roundRect(textBoxX, textBoxY, textBoxW, textBoxHeight, radius);
@@ -153,61 +150,45 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
 
             ctx.restore();
 
-
             // --- 4. Draw "GPS Map Camera" Logo ---
             ctx.save();
-
             const logoText = "GPS Map Camera";
             const fontSize = W * 0.025;
             ctx.font = `600 ${fontSize}px ${fontStack}`;
             const logoTextWidth = ctx.measureText(logoText).width;
-
             const iconSize = fontSize * 1.5;
             const paddingH = 8;
             const paddingV = 4;
-
             const badgeW = logoTextWidth + iconSize + (paddingH * 3);
             const badgeH = iconSize + (paddingV * 2);
-
             const badgeX = textBoxX + textBoxW - badgeW;
-            const badgeY = textBoxY - badgeH + 5; // +5 to overlap/merge
-
-            // Draw Background (Same color)
+            const badgeY = textBoxY - badgeH + 5;
             ctx.fillStyle = overlayColor;
             ctx.beginPath();
-            // Round top corners (radius 5), square bottom
             ctx.roundRect(badgeX, badgeY, badgeW, badgeH, [5, 5, 0, 0]);
             ctx.fill();
-
-            // Draw Icon Image
             if (logoImg) {
                 ctx.drawImage(logoImg, badgeX + paddingH, badgeY + paddingV, iconSize, iconSize);
             }
-
-            // Text
             ctx.fillStyle = "white";
             ctx.textAlign = "left";
-            // Align text vertically with the icon
             const textY = badgeY + (badgeH / 2) + (fontSize * 0.35);
-            ctx.fillText(logoText, badgeX + iconSize + (paddingH * 2), textY);
-
+            ctx.fillText(logoText, badgeX + iconSize + (paddingH * 1.5), textY);
             ctx.restore();
 
-
+            // Set Data URL for Web
             setDownloadUrl(canvas.toDataURL('image/jpeg', 0.9));
         };
-
         renderCanvas();
-
     }, [uploadedImage, data, mapSnapshot]);
 
+    // ... (existing helper) ...
     const drawMapFallback = (ctx, x, y, size) => {
         const grad = ctx.createLinearGradient(x, y, x + size, y + size);
         grad.addColorStop(0, '#555');
         grad.addColorStop(1, '#333');
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, size, size);
-
         ctx.strokeStyle = 'rgba(255,255,255,0.3)';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -217,8 +198,39 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
         ctx.stroke();
     };
 
-    const handleDownload = () => {
-        if (downloadUrl) {
+    const handleDownload = async () => {
+        if (!downloadUrl) return;
+
+        if (Capacitor.isNativePlatform()) {
+            try {
+                // Native Share Logic
+                const base64Data = downloadUrl.split(',')[1];
+                const fileName = `gps-watermark-${Date.now()}.jpg`;
+
+                // Write to cache directory first
+                const savedFile = await Filesystem.writeFile({
+                    path: fileName,
+                    data: base64Data,
+                    directory: Directory.Cache
+                });
+
+                // Share directly
+                await Share.share({
+                    title: 'Share Watermarked Image',
+                    text: 'Here is your watermarked photo',
+                    url: savedFile.uri,
+                    dialogTitle: 'Share with'
+                });
+
+            } catch (error) {
+                console.error("Error sharing file", error);
+                Toast.show({
+                    text: 'Error saving/sharing image: ' + error.message,
+                    duration: 'long'
+                });
+            }
+        } else {
+            // Web Logic
             const link = document.createElement('a');
             link.download = 'watermarked-image.jpg';
             link.href = downloadUrl;
@@ -256,7 +268,7 @@ const WatermarkCanvas = ({ uploadedImage, data, mapSnapshot }) => {
                         borderRadius: '5px'
                     }}
                 >
-                    Download Image
+                    {Capacitor.isNativePlatform() ? "Share / Save Image" : "Download Image"}
                 </button>
             )}
         </div>

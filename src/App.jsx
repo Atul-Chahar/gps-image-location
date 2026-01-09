@@ -88,13 +88,8 @@ function App() {
             )}
 
             {uploadedImage && (
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 350px',
-                    gap: '20px',
-                    alignItems: 'start'
-                }}>
-                    <div style={{ minWidth: 0 }}> {/* prevent grid blowout */}
+                <div className="watermark-layout">
+                    <div style={{ minWidth: 0, width: '100%' }}> {/* prevent grid blowout and ensure full width */}
                         <WatermarkCanvas
                             uploadedImage={uploadedImage}
                             data={watermarkData}
